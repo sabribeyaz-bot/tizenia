@@ -102,7 +102,8 @@
   $('sendKey').onclick = function () {
     var k = $('apiKey').value.trim();
     var note = $('keyNote');
-    if (!/^[A-Za-z0-9_-]{20,}$/.test(k)) { note.className = 'note err'; note.textContent = 'Bu bir Gemini anahtarına benzemiyor. Kopyaladığınız anahtarın tamamını yapıştırın.'; return; }
+    // Google keys look like "AIza…" or the newer "AQ.…" form (letters, digits, - _ .)
+    if (!/^[A-Za-z0-9._-]{20,}$/.test(k)) { note.className = 'note err'; note.textContent = 'Bu bir Gemini anahtarına benzemiyor. Kopyaladığınız anahtarın tamamını yapıştırın.'; return; }
     note.className = 'note ok'; note.textContent = '⏳ TV anahtarı deniyor…';
     var id = newId();
     Relay.post(pair.topic, key, { kind: 'key', id: id, key: k }).then(function () {
