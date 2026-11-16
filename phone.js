@@ -1,4 +1,4 @@
-// Tizenie phone page: opened by scanning the QR code on the TV.
+// Tizenia phone page: opened by scanning the QR code on the TV.
 // Type or speak a question -> it is encrypted and sent to the TV -> the TV asks
 // Gemini and shows the answer -> the answer comes back here (and can be read aloud).
 (function () {
@@ -80,7 +80,7 @@
     log.push({ id: id + 'a', role: 'ai', text: '', pending: true });
     render();
     Relay.post(pair.topic, key, { kind: 'ask', id: id, text: text }).then(function () {
-      timers[id] = setTimeout(function () { fail(id, 'TV cevap vermedi. Tizenie TV\'de açık mı?'); }, 20000);
+      timers[id] = setTimeout(function () { fail(id, 'TV cevap vermedi. Tizenia TV\'de açık mı?'); }, 20000);
     }).catch(function () { fail(id, 'Gönderilemedi. İnternet bağlantınızı kontrol edin.'); });
   }
 
@@ -107,7 +107,7 @@
     note.className = 'note ok'; note.textContent = '⏳ TV anahtarı deniyor…';
     var id = newId();
     Relay.post(pair.topic, key, { kind: 'key', id: id, key: k }).then(function () {
-      timers[id] = setTimeout(function () { note.className = 'note err'; note.textContent = 'TV cevap vermedi. Tizenie TV\'de açık mı?'; }, 20000);
+      timers[id] = setTimeout(function () { note.className = 'note err'; note.textContent = 'TV cevap vermedi. Tizenia TV\'de açık mı?'; }, 20000);
     }).catch(function () { note.className = 'note err'; note.textContent = 'Gönderilemedi. İnternet bağlantınızı kontrol edin.'; });
   };
 
@@ -153,7 +153,7 @@
 
   function hello() {
     Relay.post(pair.topic, key, { kind: 'hello' }).catch(function () { /* retry on next open */ });
-    setTimeout(function () { if (!gotHi) setStatus('', 'TV yanıt vermiyor — Tizenie açık mı?'); }, 8000);
+    setTimeout(function () { if (!gotHi) setStatus('', 'TV yanıt vermiyor — Tizenia açık mı?'); }, 8000);
   }
 
   // ---------- reading answers aloud ----------

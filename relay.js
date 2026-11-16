@@ -1,4 +1,4 @@
-// Tizenie relay: encrypted messages between the TV and the phone.
+// Tizenia relay: encrypted messages between the TV and the phone.
 // Same idea as MIGO: the TV shows a QR code that holds a random topic name and
 // a secret key (the key is in the URL #fragment and never goes to a server).
 // Messages are encrypted with tweetnacl secretbox and passed through the free
