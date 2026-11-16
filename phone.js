@@ -135,7 +135,8 @@
       a.pending = false; a.role = d.error ? 'err' : 'ai'; a.text = d.text;
       setStatus('ok', 'TV bağlı');
       save(); render();
-      if (!d.error && speakOn) speak(d.text);
+      // The TV reads the answer itself: don't speak twice.
+      if (!d.error && speakOn && !d.tvSpeaks) speak(d.text);
     } else if (d.kind === 'keyok') {
       var note = $('keyNote');
       if (d.ok) {
