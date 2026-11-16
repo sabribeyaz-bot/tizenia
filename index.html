@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0b1e">
+<title>Tizenie</title>
+<style>
+:root{--bg:#0a0b1e;--card:rgba(255,255,255,.07);--line:rgba(255,255,255,.12);--teal:#5eead4;--txt:#fff;--mut:rgba(255,255,255,.62)}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--txt);background:var(--bg);background-image:radial-gradient(circle at 10% 0%,#2a1a6e 0,transparent 60%),radial-gradient(circle at 100% 100%,#0d4b5c 0,transparent 55%);background-attachment:fixed}
+button,input,textarea{font-family:inherit}
+button{-webkit-tap-highlight-color:transparent;touch-action:manipulation;cursor:pointer}
+.app{max-width:560px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;padding:0 16px}
+header{display:flex;align-items:center;gap:10px;padding:16px 0 10px;position:sticky;top:0;background:linear-gradient(var(--bg) 70%,transparent);z-index:5}
+.logo{font-size:26px;font-weight:900;flex:1}.logo span{color:var(--teal)}
+.st{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut);padding:6px 12px;border-radius:99px;background:var(--card)}
+.dot{width:9px;height:9px;border-radius:50%;background:#f87171}.st.ok .dot{background:#4ade80;box-shadow:0 0 8px #4ade80}.st.wait .dot{background:#fbbf24}
+.iconbtn{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:#fff;font-size:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin:10px 0}
+.card h2{margin:0 0 8px;font-size:18px}.card p,.card li{color:var(--mut);font-size:14px;line-height:1.5}.card ol{padding-left:20px;margin:8px 0}
+.card a{color:var(--teal)}
+.bad{border-color:rgba(248,113,113,.5);background:rgba(248,113,113,.1)}
+#log{flex:1;padding:6px 0 12px}
+.msg{display:flex;margin:10px 0}.msg.user{justify-content:flex-end}
+.bubble{max-width:86%;padding:12px 16px;border-radius:20px;font-size:16px;line-height:1.45;white-space:pre-wrap;word-wrap:break-word}
+.user .bubble{background:linear-gradient(135deg,#6d28d9,#2563eb);border-bottom-right-radius:6px}
+.ai .bubble{background:var(--card);border:1px solid var(--line);border-bottom-left-radius:6px}
+.err .bubble{background:rgba(248,113,113,.12);border-color:rgba(248,113,113,.5)}
+.who{font-size:11px;color:var(--mut);margin-bottom:3px}
+.typing span{display:inline-block;width:8px;height:8px;margin-right:5px;border-radius:50%;background:var(--teal);animation:b 1.2s infinite}.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+@keyframes b{0%,80%,100%{opacity:.2}40%{opacity:1}}
+.speak{margin-top:6px;border:0;background:none;color:var(--teal);font-size:13px;padding:2px 0}
+.empty{text-align:center;color:var(--mut);padding:30px 10px;font-size:15px;line-height:1.6}
+.dock{position:sticky;bottom:0;padding:10px 0 calc(12px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%)}
+.interim{min-height:20px;font-size:14px;color:var(--teal);padding:0 6px 6px}
+.row{display:flex;gap:8px;align-items:flex-end}
+textarea{flex:1;resize:none;max-height:140px;min-height:52px;padding:14px 16px;border-radius:18px;border:2px solid var(--line);background:rgba(0,0,0,.35);color:#fff;font-size:16px;outline:none}
+textarea:focus{border-color:var(--teal)}
+.send{width:52px;height:52px;border-radius:50%;border:0;background:linear-gradient(135deg,#2563eb,#5eead4);color:#fff;font-size:22px;flex:none}
+.send:disabled{opacity:.4}
+.mic{display:block;width:100%;margin-top:10px;padding:16px;border:0;border-radius:18px;background:linear-gradient(135deg,#6d28d9,#db2777);color:#fff;font-size:18px;font-weight:800}
+.mic.on{background:#ef4444;animation:pulse 1.2s infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 10px rgba(239,68,68,.25)}}
+.opts{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.opt{flex:1;padding:10px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:#fff;font-size:13px;font-weight:600;white-space:nowrap}
+.opt.on{border-color:var(--teal);background:rgba(94,234,212,.15)}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 6px}
+input[type=password],input[type=text]{width:100%;padding:13px;border-radius:12px;border:2px solid var(--line);background:rgba(0,0,0,.35);color:#fff;font-size:15px;outline:none}
+.btn{width:100%;margin-top:12px;padding:14px;border:0;border-radius:14px;background:linear-gradient(135deg,#2563eb,#5eead4);color:#fff;font-size:16px;font-weight:800}
+.note{font-size:13px;margin-top:10px;padding:10px 12px;border-radius:10px;display:none}.note.ok{display:block;background:rgba(74,222,128,.14);border:1px solid #4ade80}.note.err{display:block;background:rgba(248,113,113,.14);border:1px solid #f87171}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">Tizen<span>ie</span></div>
+    <div id="st" class="st"><i class="dot"></i><span>Bağlanıyor…</span></div>
+    <button id="gear" class="iconbtn" title="Ayarlar" aria-label="Ayarlar">⚙️</button>
+  </header>
+
+  <div id="bad" class="card bad hide">
+    <h2>TV ile eşleşmedi</h2>
+    <p>Bu sayfa TV'deki Tizenie uygulamasında görünen QR kod okutularak açılmalı. TV'de Tizenie'yi açın ve sağdaki kodu telefonun kamerasıyla okutun.</p>
+  </div>
+
+  <section id="settings" class="card hide">
+    <h2>🔑 Gemini anahtarı</h2>
+    <p>Tizenie, Google'ın Gemini yapay zekâsını kullanır. Bunun için ücretsiz bir anahtar gerekir:</p>
+    <ol>
+      <li><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> adresini açın, Google hesabınızla girin.</li>
+      <li><b>Create API key</b> (API anahtarı oluştur) düğmesine basın.</li>
+      <li>Çıkan anahtarı kopyalayıp aşağıya yapıştırın.</li>
+    </ol>
+    <label for="apiKey">Anahtar</label>
+    <input id="apiKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="AIza…">
+    <button id="sendKey" class="btn" type="button">TV'ye gönder</button>
+    <div id="keyNote" class="note"></div>
+    <p style="margin-top:12px">Anahtar bu telefonda şifrelenip yalnızca sizin TV'nize gider. Telefonda saklanmaz.</p>
+  </section>
+
+  <div id="log"></div>
+
+  <div id="dock" class="dock hide">
+    <div id="interim" class="interim"></div>
+    <div class="row">
+      <textarea id="q" rows="1" placeholder="Sorunuzu yazın…"></textarea>
+      <button id="send" class="send" type="button" aria-label="Gönder">➤</button>
+    </div>
+    <button id="mic" class="mic" type="button">🎤 Dokun ve konuş</button>
+    <div class="opts">
+      <button id="optSpeak" class="opt" type="button">🔊 Cevabı sesli oku</button>
+      <button id="optClear" class="opt" type="button">🗑 Yeni sohbet</button>
+    </div>
+  </div>
+</div>
+<script src="nacl-fast.min.js"></script>
+<script src="relay.js"></script>
+<script src="phone.js"></script>
+</body>
+</html>
