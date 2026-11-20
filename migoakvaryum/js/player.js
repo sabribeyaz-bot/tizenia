@@ -1,7 +1,11 @@
 /*
  * MIGOAKVARYUM — oynatıcı (player.html içinde çalışır)
- * Ana uygulamadan kamera listesini alır, YouTube canlı yayınını oynatır,
- * hata / donma olursa sıradaki kameraya geçer ve durumu üst pencereye bildirir.
+ * Ana uygulamadan kamera listesini alır ve her ROTATE_MS'de bir sıradaki
+ * kameraya geçer (dünya turu). Her kamerada:
+ *   - yayın gerçekten CANLI mı (kayıt/tekrar değil) diye bakar,
+ *   - REQUIRE_4K açıksa kaynakta 4K var mı diye bakar,
+ *   - hata verir / başlamaz / donarsa beklemeden sıradakine geçer.
+ * Bir tam turda hiç 4K canlı yayın bulunamazsa 4K şartını gevşetir.
  * Eski Tizen TV tarayıcıları için ES5 ile yazıldı.
  */
 (function () {
@@ -13,10 +17,17 @@
     var player = null;
     var ytReady = false;
     var attemptToken = 0;
-    var timers = { start: null, stall: null, watchdog: null, primary: null, retry: null };
+    var timers = { start: null, stall: null, watchdog: null, rotate: null, retry: null };
     var lastTime = -1, lastTimeChange = 0;
 
+    // Tur takibi: bu turda kaç kamera başarıyla gösterildi / denendi
+    var triedInRound = 0;
+    var shownInRound = 0;
+    var relax4K = false;      // tam tur 4K bulamazsa true olur
+    var badCams = {};         // camIndex -> son başarısızlık zamanı
+
     var ST = { ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING: 3 };
+    var BAD_CAM_MS = 30 * 60 * 1000;   // başarısız kamerayı 30 dk atla
 
     function post(msg) {
         msg.src = 'migo-player';
@@ -38,20 +49,19 @@
     function buildAttempts(cams) {
         var list = [];
         var common = 'autoplay=1&mute=1&controls=0&disablekb=1&fs=0&modestbranding=1' +
-                     '&rel=0&iv_load_policy=3&playsinline=1&enablejsapi=1';
+                     '&rel=0&iv_load_policy=3&playsinline=1&enablejsapi=1&vq=hd2160';
         if (location.protocol.indexOf('http') === 0) {
             common += '&origin=' + encodeURIComponent(location.protocol + '//' + location.host);
         }
         for (var i = 0; i < cams.length; i++) {
             var c = cams[i];
+            var src = null;
             if (c.videoId) {
-                list.push({ cam: c, camIndex: i,
-                    src: 'https://www.youtube.com/embed/' + c.videoId + '?' + common });
+                src = 'https://www.youtube.com/embed/' + c.videoId + '?' + common;
+            } else if (c.channelId) {
+                src = 'https://www.youtube.com/embed/live_stream?channel=' + c.channelId + '&' + common;
             }
-            if (c.channelId) {
-                list.push({ cam: c, camIndex: i,
-                    src: 'https://www.youtube.com/embed/live_stream?channel=' + c.channelId + '&' + common });
-            }
+            if (src) { list.push({ cam: c, camIndex: i, src: src }); }
         }
         return list;
     }
@@ -66,18 +76,59 @@
         while (box.firstChild) { box.removeChild(box.firstChild); }
     }
 
-    function next(reason) {
-        var n = current + 1;
-        if (n >= attempts.length) {
-            // Hepsi denendi: bir süre bekle ve baştan başla
-            destroyPlayer();
-            clearAll();
-            current = -1;
-            post({ type: 'allFailed', reason: reason });
-            timers.retry = setTimeout(function () { tryAttempt(0); }, 60 * 1000);
-            return;
+    function isBad(a) {
+        var t = badCams[a.camIndex];
+        return t && (Date.now() - t < BAD_CAM_MS);
+    }
+
+    // Kamera başarısız: işaretle ve hemen sıradakine geç
+    function fail(reason) {
+        var a = attempts[current];
+        if (a) { badCams[a.camIndex] = Date.now(); }
+        advance(reason);
+    }
+
+    // Sıradaki kameraya geç (dünya turu)
+    function advance(reason) {
+        if (!attempts.length) { return; }
+
+        // Bir tur tamamlandı mı?
+        if (triedInRound >= attempts.length) {
+            if (shownInRound === 0) {
+                if (settings.REQUIRE_4K && !relax4K) {
+                    // Hiç 4K canlı bulunamadı: şartı gevşet, kara listeyi temizle, hemen yeniden dene
+                    relax4K = true;
+                    badCams = {};
+                } else {
+                    destroyPlayer();
+                    clearAll();
+                    triedInRound = 0;
+                    post({ type: 'allFailed', reason: reason });
+                    timers.retry = setTimeout(function () { badCams = {}; advance('yeniden deneme'); },
+                        60 * 1000);
+                    return;
+                }
+            } else if (relax4K && settings.REQUIRE_4K) {
+                relax4K = false;   // her yeni turda 4K'yı tekrar dene
+            }
+            triedInRound = 0;
+            shownInRound = 0;
         }
-        tryAttempt(n, reason);
+
+        // Kara listede olmayan sıradaki kamerayı bul
+        var n = current;
+        for (var k = 0; k < attempts.length; k++) {
+            n = (n + 1) % attempts.length;
+            triedInRound++;
+            if (!isBad(attempts[n])) {
+                tryAttempt(n, reason);
+                return;
+            }
+            if (triedInRound >= attempts.length) { break; }
+        }
+        // Hepsi kara listede
+        current = n;
+        advance(reason);
     }
 
     function tryAttempt(i, reason) {
@@ -103,37 +154,64 @@
             events: {
                 onReady: live(onReady),
                 onStateChange: live(onStateChange),
-                onError: live(function (e) { next('hata ' + e.data); })
+                onError: live(function (e) { fail('hata ' + e.data); })
             }
         });
 
-        timers.start = setTimeout(function () { next('başlamadı'); }, settings.START_TIMEOUT_MS);
+        timers.start = setTimeout(function () { fail('başlamadı'); }, settings.START_TIMEOUT_MS);
     }
 
     function onReady() {
         try {
             if (settings.SOUND) { player.unMute(); player.setVolume(40); } else { player.mute(); }
-            player.setPlaybackQuality && player.setPlaybackQuality('highres');
+            if (player.setPlaybackQuality) { player.setPlaybackQuality('hd2160'); }
             player.playVideo();
         } catch (e) { /* yok say */ }
+    }
+
+    function has4K() {
+        var levels = [];
+        try { levels = player.getAvailableQualityLevels() || []; } catch (e) { return null; }
+        if (!levels.length) { return null; }   // bilinmiyor
+        for (var i = 0; i < levels.length; i++) {
+            if (levels[i] === 'hd2160' || levels[i] === 'highres') { return true; }
+        }
+        return false;
+    }
+
+    function isLiveNow() {
+        try {
+            var d = player.getVideoData();
+            if (d && typeof d.isLive === 'boolean') { return d.isLive; }
+        } catch (e) { /* yok say */ }
+        return true;   // bilgi yoksa kabul et
     }
 
     function onStateChange(e) {
         if (e.data === ST.PLAYING) {
             clear('start');
             clear('stall');
-            startWatchdog();
-            schedulePrimaryRetry();
+
+            if (!timers.rotate) {
+                // Bu kamerada ilk kez oynamaya başladı: kontrolleri yap
+                if (!isLiveNow()) { fail('canlı değil'); return; }
+                if (settings.REQUIRE_4K && !relax4K && has4K() === false) { fail('4K değil'); return; }
+
+                shownInRound++;
+                timers.rotate = setTimeout(function () { advance('sıradaki yer'); }, settings.ROTATE_MS);
+                startWatchdog();
+            }
+
             var a = attempts[current];
             var q = '';
             try { q = player.getPlaybackQuality(); } catch (err) { /* yok say */ }
             post({ type: 'playing', name: a.cam.name, place: a.cam.place, quality: q });
         } else if (e.data === ST.BUFFERING) {
             if (!timers.stall) {
-                timers.stall = setTimeout(function () { next('donma'); }, settings.STALL_TIMEOUT_MS);
+                timers.stall = setTimeout(function () { fail('donma'); }, settings.STALL_TIMEOUT_MS);
             }
         } else if (e.data === ST.ENDED) {
-            next('yayın bitti');
+            fail('yayın bitti');
         } else if (e.data === ST.PAUSED) {
             try { player.playVideo(); } catch (err) { /* yok say */ }
         }
@@ -151,32 +229,26 @@
                 lastTime = t;
                 lastTimeChange = Date.now();
             } else if (Date.now() - lastTimeChange > settings.STALL_TIMEOUT_MS) {
-                next('görüntü dondu');
+                fail('görüntü dondu');
             }
-            // Kaliteyi düzenli bildir (etiket için)
             try { post({ type: 'quality', quality: player.getPlaybackQuality() }); } catch (e2) { /* yok say */ }
-        }, 10 * 1000);
+        }, 5 * 1000);
     }
 
-    // Yedek kameradaysak bir süre sonra ana kamerayı yeniden dene
-    function schedulePrimaryRetry() {
-        clear('primary');
-        if (attempts[current] && attempts[current].camIndex > 0) {
-            timers.primary = setTimeout(function () { tryAttempt(0, 'ana kameraya dönüş'); },
-                settings.PRIMARY_RETRY_MS);
-        }
-    }
-
-    function maybeStart() {
+    function start() {
         if (ytReady && settings && current === -1 && attempts.length) {
-            tryAttempt(0);
+            triedInRound = 0;
+            shownInRound = 0;
+            // Her açılışta farklı bir yerden başla
+            current = Math.floor(Math.random() * attempts.length) - 1;
+            advance('');
         }
     }
 
     // YouTube IFrame API hazır olunca çağrılır
     window.onYouTubeIframeAPIReady = function () {
         ytReady = true;
-        maybeStart();
+        start();
     };
 
     window.addEventListener('message', function (ev) {
@@ -184,9 +256,10 @@
         if (!d || d.src !== 'migo-app') { return; }
         if (d.type === 'start') {
             settings = d.settings;
+            if (!settings.ROTATE_MS) { settings.ROTATE_MS = 60 * 1000; }
             attempts = buildAttempts(d.settings.CAMERAS || []);
             current = -1;
-            maybeStart();
+            start();
         } else if (d.type === 'stop') {
             attemptToken++;
             clearAll();
